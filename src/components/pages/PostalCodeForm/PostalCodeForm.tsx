@@ -14,20 +14,34 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
+import { PostalCodeService } from "@/app/postalcode";
+import { useState } from "react";
 
 const FormSchema = z.object({
-  username: z.string().min(2, {
-    message: "Username must be at least 2 characters.",
-  }),
+  postalCode: z
+    .string()
+    .transform((val) => val.replace("-", ""))
+    .refine((val) => val.length === 7, {
+      message: "郵便番号は7桁です。",
+    })
+    .refine(
+      async (val) => {
+        const addr = await PostalCodeService.getAddr(val);
+        return addr.region_id !== 0;
+      },
+      { message: "存在しない郵便番号です。" }
+    ),
 });
 
 export function PostalCodeForm() {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      username: "",
+      postalCode: "",
     },
   });
+
+  const [addrText, setAddrText] = useState("");
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     toast({
@@ -45,21 +59,36 @@ export function PostalCodeForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="w-2/3 space-y-6">
         <FormField
           control={form.control}
-          name="username"
+          name="postalCode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Username</FormLabel>
+              <FormLabel>PostalCode</FormLabel>
               <FormControl>
-                <Input placeholder="shadcn" {...field} />
+                <Input
+                  placeholder="shadcn"
+                  {...field}
+                  onChange={(ev) => {
+                    const value = ev.currentTarget.value;
+                    PostalCodeService.getAddr(value).then((addr) => {
+                      console.log(value, addr);
+                      setAddrText(JSON.stringify(addr, null, 2));
+                    });
+
+                    field.onChange(ev);
+                  }}
+                />
               </FormControl>
+              <FormMessage />
               <FormDescription>
                 This is your public display name.
               </FormDescription>
-              <FormMessage />
             </FormItem>
           )}
         />
         <Button type="submit">Submit</Button>
+        <div>
+          <p>{addrText}</p>
+        </div>
       </form>
     </Form>
   );
